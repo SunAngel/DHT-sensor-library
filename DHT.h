@@ -6,14 +6,16 @@
  #include "WProgram.h"
 #endif
 
-/* DHT library 
+/* DHT library
 
 MIT license
 written by Adafruit Industries
 */
 
 // how many timing transitions we need to keep track of. 2 * number bits + extra
-#define MAXTIMINGS 85
+//#define MAXTIMINGS 85
+// how many timing transitions we need to keep track of. number bits + extra
+#define MAXTIMINGS 43
 
 #define DHT11 11
 #define DHT22 22
@@ -23,19 +25,20 @@ written by Adafruit Industries
 class DHT {
  private:
   uint8_t data[6];
-  uint8_t _pin, _type, _count;
+  uint8_t _pin, _type;
   unsigned long _lastreadtime;
   boolean firstreading;
 
  public:
-  DHT(uint8_t pin, uint8_t type, uint8_t count=6);
+  DHT(uint8_t pin, uint8_t type);
   void begin(void);
-  float readTemperature(bool S=false);
-  float convertCtoF(float);
-  float convertFtoC(float);
-  float computeHeatIndex(float tempFahrenheit, float percentHumidity, bool isFahrenheit=false);
-  float readHumidity(void);
+  int16_t readTemperature(void);
+  int16_t readHumidity(void);
   boolean read(void);
+  uint8_t getPin() { return _pin; }
+
+  static const int16_t badTemperature = -1000;
+  static const int16_t badHumidity = -1000;
 
 };
 #endif

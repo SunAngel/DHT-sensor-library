@@ -1,4 +1,4 @@
-/* DHT library 
+/* DHT library
 
 MIT license
 written by Adafruit Industries
@@ -6,186 +6,129 @@ written by Adafruit Industries
 
 #include "DHT.h"
 
-DHT::DHT(uint8_t pin, uint8_t type, uint8_t count) {
-  _pin = pin;
-  _type = type;
-  _count = count;
-  firstreading = true;
+DHT::DHT(uint8_t pin, uint8_t type) {
+	_pin = pin;
+	_type = type;
+	firstreading = true;
 }
 
 void DHT::begin(void) {
-  // set up the pins!
-  pinMode(_pin, INPUT);
-  digitalWrite(_pin, HIGH);
-  _lastreadtime = 0;
+	// set up the pins!
+	pinMode(_pin, INPUT);
+	digitalWrite(_pin, HIGH);
+	_lastreadtime = 0;
 }
 
-//boolean S == Scale.  True == Fahrenheit; False == Celcius
-float DHT::readTemperature(bool S) {
-  float f;
+//boolean S == Scale.  True == Farenheit; False == Celcius
+int16_t DHT::readTemperature(void) {
+	int16_t tempx10;
 
-  if (read()) {
-    switch (_type) {
-    case DHT11:
-      f = data[2];
-      if(S)
-      	f = convertCtoF(f);
-      	
-      return f;
-    case DHT22:
-    case DHT21:
-      f = data[2] & 0x7F;
-      f *= 256;
-      f += data[3];
-      f /= 10;
-      if (data[2] & 0x80)
-	f *= -1;
-      if(S)
-	f = convertCtoF(f);
+	if (read()) {
+		switch (_type) {
+			case DHT11:
+				return data[2];
+			case DHT22:
+			case DHT21:
+				tempx10 = ((data[2] & 0x7F) << 8) + data[3];
+				if (data[2] & 0x80) tempx10 = -tempx10;
 
-      return f;
-    }
-  }
-  return NAN;
+				return tempx10;
+		}
+	}
+	return DHT::badTemperature;
 }
 
-float DHT::convertCtoF(float c) {
-	return c * 9 / 5 + 32;
+int16_t DHT::readHumidity(void) {
+	int16_t humx10;
+	if (read()) {
+		switch (_type) {
+			case DHT11:
+				 return data[0];
+			case DHT22:
+			case DHT21:
+				humx10 = (data[0] << 8) + data[1];
+				return humx10;
+		}
+	}
+	return DHT::badHumidity;
 }
-
-float DHT::convertFtoC(float f) {
-  return (f - 32) * 5 / 9; 
-}
-
-float DHT::readHumidity(void) {
-  float f;
-  if (read()) {
-    switch (_type) {
-    case DHT11:
-      f = data[0];
-      return f;
-    case DHT22:
-    case DHT21:
-      f = data[0];
-      f *= 256;
-      f += data[1];
-      f /= 10;
-      return f;
-    }
-  }
-  return NAN;
-}
-
-//boolean isFahrenheit: True == Fahrenheit; False == Celcius
-float DHT::computeHeatIndex(float temperature, float percentHumidity, bool isFahrenheit) {
-  // Adapted from equation at: https://github.com/adafruit/DHT-sensor-library/issues/9 and
-  // Wikipedia: http://en.wikipedia.org/wiki/Heat_index
-  if (!isFahrenheit) {
-    return -8.784695 +
-             1.61139411 * temperature +
-             2.338549   * percentHumidity +
-            -0.14611605 * temperature*percentHumidity +
-            -0.01230809 * pow(temperature, 2) +
-            -0.01642482 * pow(percentHumidity, 2) +
-             0.00221173 * pow(temperature, 2) * percentHumidity +
-             0.00072546 * temperature*pow(percentHumidity, 2) +
-            -0.00000358 * pow(temperature, 2) * pow(percentHumidity, 2);
-  }
-  return -42.379 + 
-           2.04901523 * temperature + 
-          10.14333127 * percentHumidity +
-          -0.22475541 * temperature*percentHumidity +
-          -0.00683783 * pow(temperature, 2) +
-          -0.05481717 * pow(percentHumidity, 2) + 
-           0.00122874 * pow(temperature, 2) * percentHumidity + 
-           0.00085282 * temperature*pow(percentHumidity, 2) +
-          -0.00000199 * pow(temperature, 2) * pow(percentHumidity, 2);
-}
-
 
 boolean DHT::read(void) {
-  uint8_t laststate = HIGH;
-  uint8_t counter = 0;
-  uint8_t j = 0, i;
-  unsigned long currenttime;
+	uint8_t j = 0, i;
+	int32_t delayT;
+	long int currenttime = 0;
+	// Check if sensor was read less than two seconds ago and return early
+	// to use last reading.
+	currenttime = millis();
+	if (currenttime < _lastreadtime) {
+		// ie there was a rollover
+		_lastreadtime = 0;
+	}
+	if (!firstreading && ((currenttime - _lastreadtime) < 2000)) {
+		return true; // return last correct measurement
+		//delay(2000 - (currenttime - _lastreadtime));
+	}
+	firstreading = false;
+	/*
+	   Serial.print("Currtime: "); Serial.print(currenttime);
+	   Serial.print(" Lasttime: "); Serial.print(_lastreadtime);
+	   */
+	_lastreadtime = millis();
 
-  // Check if sensor was read less than two seconds ago and return early
-  // to use last reading.
-  currenttime = millis();
-  if (currenttime < _lastreadtime) {
-    // ie there was a rollover
-    _lastreadtime = 0;
-  }
-  if (!firstreading && ((currenttime - _lastreadtime) < 2000)) {
-    return true; // return last correct measurement
-    //delay(2000 - (currenttime - _lastreadtime));
-  }
-  firstreading = false;
-  /*
-    Serial.print("Currtime: "); Serial.print(currenttime);
-    Serial.print(" Lasttime: "); Serial.print(_lastreadtime);
-  */
-  _lastreadtime = millis();
+	data[0] = data[1] = data[2] = data[3] = data[4] = 0;
 
-  data[0] = data[1] = data[2] = data[3] = data[4] = 0;
-  
-  // pull the pin high and wait 250 milliseconds
-  digitalWrite(_pin, HIGH);
-  delay(250);
+	// pull the pin high and wait 10 milliseconds
+	digitalWrite(_pin, HIGH);
+	delay(10);
 
-  // now pull it low for ~20 milliseconds
-  pinMode(_pin, OUTPUT);
-  digitalWrite(_pin, LOW);
-  delay(20);
-  noInterrupts();
-  digitalWrite(_pin, HIGH);
-  delayMicroseconds(40);
-  pinMode(_pin, INPUT);
+	// now pull it low for ~1 milliseconds
+	pinMode(_pin, OUTPUT);
+	digitalWrite(_pin, LOW);
+	delay(1);
+	noInterrupts();
+	digitalWrite(_pin, HIGH);
+	delayMicroseconds(40);
+	pinMode(_pin, INPUT);
+	delayMicroseconds(10);
 
-  // read in timings
-  for ( i=0; i< MAXTIMINGS; i++) {
-    counter = 0;
-    while (digitalRead(_pin) == laststate) {
-      counter++;
-      delayMicroseconds(1);
-      if (counter == 255) {
-        break;
-      }
-    }
-    laststate = digitalRead(_pin);
+	// read in timings
+	//  pulseIn(_pin,LOW);
+	for ( i=0; i< MAXTIMINGS; i++) {
+		delayT = pulseIn(_pin,HIGH, 100000);
+		if (delayT == 0) { 
+			break; 
+		}
 
-    if (counter == 255) break;
+		// ignore first 3 transitions
+		if (i >= 1) {
+			// shove each bit into the storage bytes
+			data[j/8] <<= 1;
+			if (delayT > 50)
+				data[j/8] |= 1;
+			j++;
+		}
 
-    // ignore first 3 transitions
-    if ((i >= 4) && (i%2 == 0)) {
-      // shove each bit into the storage bytes
-      data[j/8] <<= 1;
-      if (counter > _count)
-        data[j/8] |= 1;
-      j++;
-    }
+	}
 
-  }
+	interrupts();
 
-  interrupts();
-  
-  /*
-  Serial.println(j, DEC);
-  Serial.print(data[0], HEX); Serial.print(", ");
-  Serial.print(data[1], HEX); Serial.print(", ");
-  Serial.print(data[2], HEX); Serial.print(", ");
-  Serial.print(data[3], HEX); Serial.print(", ");
-  Serial.print(data[4], HEX); Serial.print(" =? ");
-  Serial.println(data[0] + data[1] + data[2] + data[3], HEX);
-  */
+	/* 
+	   Serial.println(j, DEC);
+	   Serial.print(data[0], HEX); Serial.print(", ");
+	   Serial.print(data[1], HEX); Serial.print(", ");
+	   Serial.print(data[2], HEX); Serial.print(", ");
+	   Serial.print(data[3], HEX); Serial.print(", ");
+	   Serial.print(data[4], HEX); Serial.print(" =? ");
+	   Serial.println(data[0] + data[1] + data[2] + data[3], HEX);
+	   */
 
-  // check we read 40 bits and that the checksum matches
-  if ((j >= 40) && 
-      (data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF)) ) {
-    return true;
-  }
-  
+	// check we read 40 bits and that the checksum matches
+	if ((j >= 40) && 
+			(data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF)) ) {
+		return true;
+	}
 
-  return false;
+
+	return false;
 
 }
